@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ăn Cả Thế Giới Cùng Chiikawa</title>
+    <!-- Tải Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Thiết lập font cho toàn bộ ứng dụng */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fce4ec; /* Light Pink for Chiikawa theme */
+        }
+        /* Style cho nút khi bị disable */
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* Thêm style cho thẻ card chung */
+        .chiikawa-card {
+            border-radius: 1.5rem; /* rounded-3xl */
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(236, 72, 153, 0.3), 0 4px 6px -2px rgba(236, 72, 153, 0.1);
+        }
+
+        /* Thẻ nhân vật khi được chọn */
+        .character-card.selected {
+            border: 4px solid #9333ea; /* Ring purple */
+            background-color: #f3e8ff; /* Light purple */
+            transform: scale(1.05);
+            box-shadow: 0 20px 25px -5px rgba(147, 51, 234, 0.5), 0 8px 10px -6px rgba(147, 51, 234, 0.3);
+        }
+
+        /* Thanh progress bar giả lập */
+        .progress-bar {
+            height: 8px;
+            border-radius: 9999px;
+            background-color: #fbcfe8; /* pink-200 */
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 9999px;
+            background-color: #db2777; /* pink-600 */
+            transition: width 0.5s ease-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- Container chính (Không cần loading overlay nữa vì không tải dữ liệu) -->
+    <div id="app-container" class="p-4 sm:p-8">
+        <!-- Khu vực tiêu đề và trạng thái sẽ được render tại đây -->
+        <header id="app-header" class="text-center mb-10"></header>
+
+        <!-- Khu vực trạng thái chính -->
+        <main class="max-w-7xl mx-auto bg-white chiikawa-card p-6 sm:p-12">
+
+            <!-- Thanh Tab Chuyển đổi -->
+            <div class="flex mb-8 border-b-2 border-pink-200" id="tab-nav">
+                <!-- Buttons sẽ được render bằng JS -->
+            </div>
+            
+            <!-- Khu vực thông báo mua bán -->
+            <div id="message-area" class="mb-6 hidden"></div>
+
+            <!-- Nội dung chính dựa trên Tab -->
+            <div id="main-content">
+                <!-- Nội dung Eating hoặc Shop sẽ được render tại đây -->
+            </div>
+            
+        </main>
+        
+        <!-- Chân trang -->
+        <footer class="text-center mt-10 text-pink-400 text-sm">
+            💖 Ứng dụng giả lập ăn uống Chiikawa. Hãy chơi vui vẻ! (Trạng thái game sẽ reset khi tải lại trang) 💖
+        </footer>
+    </div>
+
+    <script type="module">
+        // --- DỮ LIỆU CỐ ĐỊNH (Không thay đổi) ---
+
+        const CHARACTERS = ["Chiikawa", "Hachiware", "Usagi"];
+        
+        // 15 LOẠI NƯỚC SỐT
+        const SAUCES = [
+            { id: 'Sauce1', name: "Sốt Mật Ong", emoji: "🍯", bonus: 20, price: 15 },
+            { id: 'Sauce2', name: "Sốt Tương Ớt", emoji: "🌶️", bonus: 25, price: 20 },
+            { id: 'Sauce3', name: "Sốt Chanh Dây", emoji: "🍋", bonus: 15, price: 10 },
+            { id: 'Sauce4', name: "Sốt Nấm Truffle", emoji: "🍄", bonus: 30, price: 25 },
+            { id: 'Sauce5', name: "Sốt Pesto Basil", emoji: "🌿", bonus: 18, price: 16 },
+            { id: 'Sauce6', name: "Sốt Tỏi Bơ", emoji: "🧈", bonus: 22, price: 17 },
+            { id: 'Sauce7', name: "Sốt BBQ Khói", emoji: "🔥", bonus: 20, price: 18 },
+            { id: 'Sauce8', name: "Sốt Phô Mai Kem", emoji: "🧀", bonus: 28, price: 22 },
+            { id: 'Sauce9', name: "Sốt Gừng Tươi", emoji: "🍚", bonus: 12, price: 10 },
+            { id: 'Sauce10', name: "Sốt Wasabi Cực Cay", emoji: "🤯", bonus: 35, price: 30 },
+            { id: 'Sauce11', name: "Sốt Tiêu Đen", emoji: "🖤", bonus: 19, price: 15 },
+            { id: 'Sauce12', name: "Sốt Cam Thảo", emoji: "🍊", bonus: 17, price: 12 },
+            { id: 'Sauce13', name: "Sốt Xoài Cay", emoji: "🥭", bonus: 27, price: 21 },
+            { id: 'Sauce14', name: "Sốt Bơ Hạt Dẻ", emoji: "🌰", bonus: 24, price: 19 },
+            { id: 'Sauce15', name: "Sốt Mù Tạt Ngọt", emoji: "💛", bonus: 16, price: 11 },
+        ];
+        const SAUCE_IDS = SAUCES.map(s => s.id);
+        
+        // Hàm Utility để lấy ngẫu nhiên 1 phần tử từ mảng
+        const getRandomElement = (array) => array[Math.floor(Math.random() * array.length)];
+        
+        // Hàm Utility để gán ngẫu nhiên các thuộc tính sở thích
+        const assignRandomPreferences = () => {
+            const favoriteCharacter = getRandomElement(CHARACTERS);
+            const avoidSauceId = getRandomElement(SAUCE_IDS);
+            
+            const availableFailCharacters = CHARACTERS.filter(c => c !== favoriteCharacter);
+            const criticalFailCharacter = getRandomElement(availableFailCharacters);
+
+            return { favoriteCharacter, avoidSauceId, criticalFailCharacter };
+        };
+
+        // 12 món ăn ban đầu (Nhật/Quốc tế)
+        const initialFoodTemplates = [
+            { id: 1, name: "Bánh Kem (ĐB)", emoji: "🍰", satisfaction: 90, price: 50, type: "Perfect", flavor: "Sweet" }, 
+            { id: 2, name: "Ramen Nóng", emoji: "🍜", satisfaction: 75, price: 30, type: "Good", flavor: "Umami" }, 
+            { id: 3, name: "Takoyaki", emoji: "🐙", satisfaction: 60, price: 25, type: "Normal", flavor: "Savory" }, 
+            { id: 4, name: "Sushi Cá Hồi", emoji: "🍣", satisfaction: 95, price: 60, type: "Perfect", flavor: "Umami" }, 
+            { id: 5, name: "Hamburger", emoji: "🍔", satisfaction: 85, price: 45, type: "Good", flavor: "Savory" }, 
+            { id: 6, name: "Bánh Mì Kẹp", emoji: "🥪", satisfaction: 55, price: 20, type: "Normal", flavor: "Savory" }, 
+            { id: 7, name: "Dâu Tây Lớn", emoji: "🍓", satisfaction: 65, price: 35, type: "Good", flavor: "Sweet" }, 
+            { id: 8, name: "Kem Ốc Quế", emoji: "🍦", satisfaction: 70, price: 40, type: "Good", flavor: "Sweet" }, 
+            { id: 9, name: "Bánh Dứa", emoji: "🍍", satisfaction: 50, price: 25, type: "Normal", flavor: "Sour" }, 
+            { id: 10, name: "Kẹo Ngọt", emoji: "🍬", satisfaction: 20, price: 5, type: "Simple", flavor: "Sweet" }, 
+            { id: 11, name: "Mì Ý Carbonara", emoji: "🍝", satisfaction: 80, price: 40, type: "Good", flavor: "Creamy" },
+            { id: 12, name: "Pizza Hải Sản", emoji: "🍕", satisfaction: 92, price: 55, type: "Perfect", flavor: "Savory" },
+        ];
+        
+        // 15 MÓN ĂN VIỆT NAM MỚI (Lần 1)
+        const vietnameseFoodTemplates = [
+            { id: 13, name: "Phở Bò Truyền Thống", emoji: "🍲", satisfaction: 98, price: 70, type: "Perfect", flavor: "Umami" },
+            { id: 14, name: "Bánh Mì Thịt Nướng", emoji: "🥖", satisfaction: 88, price: 45, type: "Good", flavor: "Savory" },
+            { id: 15, name: "Bún Chả Hà Nội", emoji: "🍜", satisfaction: 90, price: 55, type: "Perfect", flavor: "Savory" },
+            { id: 16, name: "Cơm Tấm Sườn Bì Chả", emoji: "🍚", satisfaction: 93, price: 60, type: "Perfect", flavor: "Savory" },
+            { id: 17, name: "Gỏi Cuốn Tôm Thịt", emoji: "🌯", satisfaction: 75, price: 35, type: "Good", flavor: "Fresh" },
+            { id: 18, name: "Bánh Xèo Giòn", emoji: "🥞", satisfaction: 80, price: 40, type: "Good", flavor: "Savory" },
+            { id: 19, name: "Cao Lầu Hội An", emoji: "🍝", satisfaction: 85, price: 50, type: "Good", flavor: "Umami" },
+            { id: 20, name: "Chả Giò (Nem Rán)", emoji: "🍤", satisfaction: 78, price: 30, type: "Good", flavor: "Savory" },
+            { id: 21, name: "Bánh Khọt Vũng Tàu", emoji: "🧀", satisfaction: 70, price: 38, type: "Normal", flavor: "Savory" },
+            { id: 22, name: "Bánh Bột Lọc", emoji: "🥟", satisfaction: 65, price: 28, type: "Normal", flavor: "Umami" },
+            { id: 23, name: "Bánh Căn Phan Rang", emoji: "🥚", satisfaction: 68, price: 32, type: "Normal", flavor: "Savory" },
+            { id: 24, name: "Mì Quảng", emoji: "🍜", satisfaction: 91, price: 58, type: "Perfect", flavor: "Umami" },
+            { id: 25, name: "Bún Riêu Cua", emoji: "🦀", satisfaction: 83, price: 48, type: "Good", flavor: "Umami" },
+            { id: 26, name: "Lẩu Mắm Miền Tây", emoji: "🥘", satisfaction: 96, price: 75, type: "Perfect", flavor: "Strong" },
+            { id: 27, name: "Bánh Tráng Trộn", emoji: "🥗", satisfaction: 55, price: 25, type: "Normal", flavor: "Spicy" },
+        ];
+
+        // 20 MÓN ĂN VIỆT NAM MỚI (Lần 2) - BẮT ĐẦU TỪ ID 28
+        const moreVietnameseFoodTemplates = [
+            { id: 28, name: "Bánh Giò", emoji: "🍚", satisfaction: 65, price: 30, type: "Good", flavor: "Savory" },
+            { id: 29, name: "Bánh Cuốn Nóng", emoji: "🍚", satisfaction: 80, price: 40, type: "Good", flavor: "Fresh" },
+            { id: 30, name: "Xôi Xéo", emoji: "🍚", satisfaction: 70, price: 35, type: "Good", flavor: "Savory" },
+            { id: 31, name: "Cháo Lòng", emoji: "🥣", satisfaction: 60, price: 28, type: "Normal", flavor: "Umami" },
+            { id: 32, name: "Phở Cuốn", emoji: "🌯", satisfaction: 75, price: 38, type: "Good", flavor: "Fresh" },
+            { id: 33, name: "Bún Bò Huế", emoji: "🍲", satisfaction: 95, price: 65, type: "Perfect", flavor: "Spicy" },
+            { id: 34, name: "Bánh Canh Cua", emoji: "🍜", satisfaction: 85, price: 50, type: "Good", flavor: "Umami" },
+            { id: 35, name: "Ốc Luộc", emoji: "🐚", satisfaction: 68, price: 33, type: "Normal", flavor: "Spicy" },
+            { id: 36, name: "Chè Khoai Môn", emoji: "🍮", satisfaction: 72, price: 35, type: "Good", flavor: "Sweet" },
+            { id: 37, name: "Bánh Bò Nướng", emoji: "🍰", satisfaction: 60, price: 25, type: "Normal", flavor: "Sweet" },
+            { id: 38, name: "Thịt Kho Trứng", emoji: "🍳", satisfaction: 90, price: 55, type: "Perfect", flavor: "Savory" },
+            { id: 39, name: "Canh Chua Cá", emoji: "🐟", satisfaction: 88, price: 52, type: "Good", flavor: "Sour" },
+            { id: 40, name: "Bánh Đúc Nóng", emoji: "🍚", satisfaction: 55, price: 22, type: "Simple", flavor: "Savory" },
+            { id: 41, name: "Bún Đậu Mắm Tôm", emoji: "🍜", satisfaction: 99, price: 75, type: "Perfect", flavor: "Strong" },
+            { id: 42, name: "Bánh Pía", emoji: "🥮", satisfaction: 63, price: 30, type: "Normal", flavor: "Sweet" },
+            { id: 43, name: "Nem Chua Rán", emoji: "🥓", satisfaction: 78, price: 38, type: "Good", flavor: "Savory" },
+            { id: 44, name: "Bún Riêu Tôm", emoji: "🍲", satisfaction: 82, price: 45, type: "Good", flavor: "Umami" },
+            { id: 45, name: "Bánh Gối", emoji: "🥟", satisfaction: 66, price: 31, type: "Normal", flavor: "Savory" },
+            { id: 46, name: "Chè Thái", emoji: "🍧", satisfaction: 75, price: 40, type: "Good", flavor: "Sweet" },
+            { id: 47, name: "Bánh Tét", emoji: "🎁", satisfaction: 85, price: 48, type: "Good", flavor: "Umami" },
+        ];
+
+
+        // 73 món ăn placeholder để đủ 120 món (12 + 35 + 73 = 120)
+        const generatePlaceholderFoods = (startId) => {
+            const placeholders = [];
+            const baseEmojis = ["🍄", "🍩", "🍿", "🍇", "🥕", "🥚", "🥐", "🧇", "🍞", "🧀"];
+            const baseNames = ["Bữa ăn bí ẩn", "Món tráng miệng", "Đồ ăn nhẹ", "Thực phẩm tươi"];
+            const flavors = ["Sweet", "Savory", "Umami", "Bitter", "Sour", "Creamy"];
+            
+            for (let i = 0; i < 73; i++) { 
+                const satisfaction = 20 + Math.floor(Math.random() * 80);
+                const price = Math.round(satisfaction * 0.6) + 5; 
+                
+                let type;
+                if (satisfaction >= 85) type = "Perfect";
+                else if (satisfaction >= 60) type = "Good";
+                else if (satisfaction >= 40) type = "Normal";
+                else type = "Simple";
+
+                placeholders.push({
+                    id: startId + i,
+                    name: `${baseNames[(i + 1) % baseNames.length]} ${i + 1}`,
+                    emoji: baseEmojis[(i + 1) % baseEmojis.length],
+                    satisfaction,
+                    price,
+                    type,
+                    flavor: getRandomElement(flavors),
+                    ...assignRandomPreferences(),
+                });
+            }
+            return placeholders;
+        };
+        
+        // 20 LOẠI NƯỚC GIẢI KHÁT (Nhật/Quốc tế)
+        const initialBeveragesTemplates = [
+            { id: 101, name: "Trà Sữa Trân Châu", emoji: "🧋", satisfaction: 45, price: 20, type: "Good", flavor: "Sweet" }, 
+            { id: 102, name: "Cà Phê Lạnh", emoji: "☕", satisfaction: 30, price: 15, type: "Simple", flavor: "Bitter" }, 
+            { id: 103, name: "Nước Ép Táo", emoji: "🍎", satisfaction: 55, price: 25, type: "Good", flavor: "Sweet" }, 
+            { id: 104, name: "Nước Khoáng", emoji: "💧", satisfaction: 10, price: 5, type: "Simple", flavor: "Neutral" }, 
+            { id: 105, name: "Sô-cô-la Nóng", emoji: "🍫", satisfaction: 60, price: 30, type: "Perfect", flavor: "Sweet" }, 
+            { id: 106, name: "Sinh Tố Bơ", emoji: "🥑", satisfaction: 50, price: 28, type: "Good", flavor: "Creamy" }, 
+            { id: 107, name: "Soda Chanh", emoji: "🍹", satisfaction: 35, price: 18, type: "Simple", flavor: "Sour" }, 
+            { id: 108, name: "Nước Ramune", emoji: "🥤", satisfaction: 40, price: 15, type: "Normal", flavor: "Sweet" }, 
+            { id: 109, name: "Nước Dừa Tươi", emoji: "🥥", satisfaction: 50, price: 22, type: "Good", flavor: "Sweet" }, 
+            { id: 110, name: "Smoothie Dâu", emoji: "🍓", satisfaction: 65, price: 35, type: "Perfect", flavor: "Sweet" }, 
+            { id: 111, name: "Bia Gừng", emoji: "🍺", satisfaction: 30, price: 15, type: "Simple", flavor: "Spicy" }, 
+            { id: 112, name: "Nước Bí Đao", emoji: "🍵", satisfaction: 40, price: 12, type: "Normal", flavor: "Herbal" }, 
+            { id: 113, name: "Lục Trà Matcha", emoji: "🍵", satisfaction: 55, price: 25, type: "Good", flavor: "Bitter" }, 
+            { id: 114, name: "Sữa Chua Uống", emoji: "🥛", satisfaction: 45, price: 18, type: "Normal", flavor: "Sour" }, 
+            { id: 115, name: "Nước Cam Ép", emoji: "🍊", satisfaction: 60, price: 30, type: "Good", flavor: "Sweet" }, 
+            { id: 116, name: "Mojito (Không Cồn)", emoji: "🌿", satisfaction: 50, price: 25, type: "Normal", flavor: "Minty" }, 
+            { id: 117, name: "Kombucha", emoji: "🏺", satisfaction: 35, price: 20, type: "Simple", flavor: "Sour" }, 
+            { id: 118, name: "Hồng Trà Đá", emoji: "🧊", satisfaction: 25, price: 10, type: "Simple", flavor: "Bitter" }, 
+            { id: 119, name: "Sữa Lúa Mạch", emoji: "🌾", satisfaction: 45, price: 22, type: "Normal", flavor: "Sweet" }, 
+            { id: 120, name: "Kem Tuyết Mãng Cầu", emoji: "🍧", satisfaction: 70, price: 40, type: "Perfect", flavor: "Sweet" }, 
+        ];
+
+        // 15 NƯỚC GIẢI KHÁT VIỆT NAM (Đã đổi tên ID 121 thành "Sinh Tố Rau Má")
+        const vietnameseBeveragesTemplates = [
+            { id: 121, name: "Sinh Tố Rau Má", emoji: "🌿", satisfaction: 78, price: 38, type: "Perfect", flavor: "Cooling" }, // ĐÃ ĐỔI TÊN
+            { id: 122, name: "Cà Phê Trứng", emoji: "☕", satisfaction: 90, price: 50, type: "Perfect", flavor: "Creamy" },
+            { id: 123, name: "Trà Chanh Giã Tay", emoji: "🍋", satisfaction: 65, price: 30, type: "Good", flavor: "Sour" },
+            { id: 124, name: "Nước Sâm Lạnh", emoji: "🌱", satisfaction: 55, price: 25, type: "Good", flavor: "Herbal" },
+            { id: 125, name: "Sinh Tố Sapoche", emoji: "🍮", satisfaction: 70, price: 40, type: "Good", flavor: "Sweet" },
+            { id: 126, name: "Sữa Chua Đánh Đá", emoji: "🧊", satisfaction: 80, price: 45, type: "Perfect", flavor: "Sour" },
+            { id: 127, name: "Chè Ba Màu", emoji: "🍧", satisfaction: 60, price: 30, type: "Good", flavor: "Sweet" },
+            { id: 128, name: "Tắc Xí Muội", emoji: "🍊", satisfaction: 45, price: 20, type: "Normal", flavor: "Sour" },
+            { id: 129, name: "Nước Mía", emoji: "🎋", satisfaction: 50, price: 15, type: "Normal", flavor: "Sweet" },
+            { id: 130, name: "Trà Đá Vỉa Hè", emoji: "🧊", satisfaction: 20, price: 5, type: "Simple", flavor: "Bitter" },
+            { id: 131, name: "Nước Ép Dứa", emoji: "🍍", satisfaction: 60, price: 30, type: "Good", flavor: "Sour" },
+            { id: 132, name: "Bạc Xỉu", emoji: "🥛", satisfaction: 75, price: 40, type: "Perfect", flavor: "Sweet" },
+            { id: 133, name: "Nước Mơ", emoji: "🍑", satisfaction: 40, price: 18, type: "Normal", flavor: "Sour" },
+            { id: 134, name: "Rượu Nếp Cẩm (Chè)", emoji: "🍷", satisfaction: 50, price: 25, type: "Normal", flavor: "Sweet" },
+            { id: 135, name: "Nước Chanh Muối", emoji: "🧂", satisfaction: 35, price: 15, type: "Simple", flavor: "Salty" },
+        ];
+
+
+        const allFoodTemplates = [...initialFoodTemplates, ...vietnameseFoodTemplates, ...moreVietnameseFoodTemplates];
+        const initialFoodMenu = allFoodTemplates.map(food => ({ ...food, category: 'food', ...assignRandomPreferences() }));
+        
+        // Bắt đầu ID cho Placeholder từ 48 (12 + 15 + 20 + 1)
+        const placeholderFoods = generatePlaceholderFoods(initialFoodTemplates.length + vietnameseFoodTemplates.length + moreVietnameseFoodTemplates.length + 1).map(food => ({ ...food, category: 'food' }));
+        
+        const allBeveragesTemplates = [...initialBeveragesTemplates, ...vietnameseBeveragesTemplates];
+        const BEVERAGES = allBeveragesTemplates.map(item => ({ ...item, category: 'beverage', ...assignRandomPreferences() }));
+
+        const FOOD_MENU = [...initialFoodMenu, ...placeholderFoods]; // Tổng 120 món ăn
+        
+        // --- STATE QUẢN LÝ (Sẽ reset khi tải lại) ---
+        
+        const getDefaultState = () => ({
+            characterSatisfaction: {
+                Chiikawa: 0,
+                Hachiware: 0,
+                Usagi: 0,
+            },
+            money: 600, 
+            inventory: FOOD_MENU.reduce((acc, food) => {
+                acc[food.id] = food.id === 1 ? 2 : 0; 
+                return acc;
+            }, {}),
+            sauceInventory: SAUCES.reduce((acc, sauce) => {
+                acc[sauce.id] = sauce.id === 'Sauce1' ? 1 : 0; 
+                return acc;
+            }, {}),
+            beverageInventory: BEVERAGES.reduce((acc, beverage) => {
+                acc[beverage.id] = beverage.id === 101 ? 1 : 0; 
+                return acc;
+            }, {}),
+
+            // Đặt selectedItem là một object đơn giản
+            selectedItem: { id: FOOD_MENU[0].id, category: 'food' }, 
+            selectedSauceId: null, 
+            selectedCharacter: "Chiikawa", 
+            feedback: "Chọn món và Nhân vật để bắt đầu!",
+            mood: { Chiikawa: "neutral", Hachiware: "neutral", Usagi: "neutral" }, 
+            activeTab: 'eat', 
+            musicUrl: "chiiik.WAV",
+        });
+
+        let state = getDefaultState();
+        
+        // --- UTILITY FUNCTIONS ---
+
+        const getItemDataFromState = (selectedItem) => {
+            if (selectedItem.category === 'food') return getFoodById(selectedItem.id);
+            if (selectedItem.category === 'beverage') return getBeverageById(selectedItem.id);
+            return null;
+        }
+
+        const getSauceById = (id) => SAUCES.find(s => s.id === id);
+        const getFoodById = (id) => FOOD_MENU.find(f => f.id === id);
+        const getBeverageById = (id) => BEVERAGES.find(b => b.id === id);
+
+        const getItemById = (id, category) => {
+            if (category === 'food') return getFoodById(id);
+            if (category === 'beverage') return getBeverageById(id);
+            return null;
+        }
+
+        const getAvoidSauceName = (selectedItemData) => {
+            if (!selectedItemData || !selectedItemData.avoidSauceId) return "Không có";
+            const sauce = getSauceById(selectedItemData.avoidSauceId);
+            return sauce ? sauce.name : "Không có";
+        };
+
+        const getInventoryCount = (item) => {
+            if (item.category === 'food') return state.inventory[item.id] || 0;
+            if (item.category === 'beverage') return state.beverageInventory[item.id] || 0;
+            return 0; // Should not happen for food/beverage
+        };
+
+        const getTotalSatisfaction = () => {
+            return state.characterSatisfaction.Chiikawa + state.characterSatisfaction.Hachiware + state.characterSatisfaction.Usagi;
+        };
+
+        const getTypeColor = (type) => {
+            switch (type) {
+                case "Perfect": return "border-red-500 bg-red-100";
+                case "Good": return "border-yellow-500 bg-yellow-100";
+                case "Normal": return "border-green-500 bg-green-100";
+                case "Simple": return "border-blue-500 bg-blue-100";
+                default: return "border-gray-300 bg-gray-100";
+            }
+        };
+
+        const updateMessage = (msg, isSuccess = true) => {
+            state.message = msg;
+            const msgArea = document.getElementById('message-area');
+            msgArea.textContent = msg;
+            msgArea.className = `mb-6 p-4 rounded-xl text-center font-extrabold shadow-lg transition-all duration-300 ${isSuccess ? 'bg-green-100 text-green-700 border-2 border-green-300' : 'bg-red-100 text-red-700 border-2 border-red-300'}`;
+            msgArea.classList.remove('hidden');
+            setTimeout(() => {
+                 msgArea.classList.add('hidden');
+                 state.message = '';
+            }, 3000);
+        };
+        
+        // --- HANDLERS (LOGIC) ---
+        // Các hàm xử lý sự kiện cần được gán vào window để truy cập từ onclick inline
+
+        // TÍNH NĂNG ĐỔI NHẠC BẰNG URL/TÊN FILE
+        window.handleUpdateMusicUrl = () => {
+            const input = document.getElementById('new-music-url');
+            let newUrl = input.value.trim();
+
+            if (!newUrl) {
+                newUrl = "chiiik.WAV"; 
+            }
+            
+            // Xử lý thu hồi URL cũ nếu là blob (tải lên file)
+            if (state.musicUrl.startsWith('blob:') && newUrl !== state.musicUrl) {
+                URL.revokeObjectURL(state.musicUrl);
+            }
+
+            state.musicUrl = newUrl;
+            renderHeader(); 
+            updateMessage(`Đã cập nhật nhạc nền thành: ${newUrl}`, true);
+        }
+
+        // TÍNH NĂNG ĐỔI NHẠC BẰNG FILE UPLOAD
+        window.handleMusicFileUpload = (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                // Thu hồi URL cũ trước khi tạo URL mới
+                if (state.musicUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(state.musicUrl);
+                }
+                
+                const newUrl = URL.createObjectURL(file);
+                state.musicUrl = newUrl;
+                renderHeader();
+                updateMessage(`✅ Đã tải và cập nhật nhạc nền: ${file.name}`, true);
+            } else {
+                updateMessage("❌ Không tìm thấy file nhạc được chọn.", false);
+            }
+        }
+
+        window.handleBuyItem = (item) => {
+            if (state.money < item.price) {
+                updateMessage("❌ Không đủ tiền (Gold) để mua món này!", false);
+                return;
+            }
+            
+            state.money -= item.price;
+            
+            if (item.category === 'sauce') {
+                state.sauceInventory[item.id] = (state.sauceInventory[item.id] || 0) + 1;
+            } else if (item.category === 'food') {
+                state.inventory[item.id] = (state.inventory[item.id] || 0) + 1;
+            } else if (item.category === 'beverage') {
+                state.beverageInventory[item.id] = (state.beverageInventory[item.id] || 0) + 1;
+            }
+
+            updateMessage(`✅ Đã mua thành công 1x ${item.name} với giá ${item.price} G.`, true);
+            
+            renderAll();
+        };
+
+        window.handleSelectItem = (itemId, itemCategory) => {
+            const item = getItemById(itemId, itemCategory);
+            if (!item) return; 
+
+            const inventory = (itemCategory === 'food') ? state.inventory : state.beverageInventory;
+
+            if ((inventory[item.id] || 0) <= 0) {
+                state.feedback = `❌ Bạn cần mua ${item.name} (hiện có 0) tại Cửa Hàng trước khi ăn.`;
+                updateMessage(`Vui lòng vào tab Cửa Hàng để mua ${itemCategory === 'food' ? 'đồ ăn' : 'nước uống'}.`, false);
+                renderContent();
+                return;
+            }
+            state.selectedItem = { id: item.id, category: item.category }; // Cập nhật state đơn giản
+            state.feedback = `Đã chọn: ${item.name}. Sẵn sàng cho ${state.selectedCharacter} ăn!`;
+            renderContent();
+        };
+
+        window.handleSelectCharacter = (name) => {
+            state.selectedCharacter = name;
+            const selectedItemData = getItemDataFromState(state.selectedItem);
+            state.feedback = `Đã chọn: ${selectedItemData.name}. Sẵn sàng cho ${state.selectedCharacter} ăn!`;
+            renderContent();
+        };
+
+        window.handleSelectSauce = (sauceId) => {
+            const currentSauce = state.selectedSauceId;
+            // Bỏ chọn nếu nhấp lần nữa vào sốt đang chọn
+            state.selectedSauceId = currentSauce === sauceId ? null : sauceId;
+            renderContent(); 
+        };
+
+        window.handleEatFood = () => {
+            const selectedItemData = getItemDataFromState(state.selectedItem);
+            const selectedCharacter = state.selectedCharacter;
+            
+            const inventory = selectedItemData.category === 'food' ? state.inventory : state.beverageInventory;
+            
+            if (!selectedItemData || (inventory[selectedItemData.id] || 0) <= 0) {
+                state.feedback = "❌ Bạn không có món ăn/nước uống này trong kho hoặc chưa chọn món!";
+                renderContent();
+                return;
+            }
+
+            const sauce = state.selectedSauceId ? getSauceById(state.selectedSauceId) : null;
+            let satisfaction = selectedItemData.satisfaction;
+            let bonusMessage = "";
+            let moneyGain = 0;
+            let newMood = "neutral";
+            
+            if (sauce && (state.sauceInventory[sauce.id] || 0) <= 0) {
+                state.feedback = "❌ Bạn không có nước sốt này trong kho!";
+                state.selectedSauceId = null;
+                renderContent();
+                return;
+            }
+
+            // 1. Tính toán điểm hài lòng từ Nước sốt
+            if (sauce) {
+                if (selectedItemData.avoidSauceId === sauce.id) {
+                    // KẾT HỢP SAI
+                    satisfaction -= sauce.bonus; 
+                    bonusMessage = `(KẾT HỢP SAI: Giảm ${sauce.bonus} điểm!) 😥`;
+                    
+                    if (selectedItemData.criticalFailCharacter === selectedCharacter) {
+                        satisfaction -= 20; // Giảm điểm phạt nặng hơn
+                        bonusMessage += ` (${selectedCharacter} cực kỳ thất vọng! -20 điểm thêm)`;
+                        newMood = "sad";
+                    } else {
+                        newMood = "neutral";
+                    }
+
+                    if (satisfaction < 0) satisfaction = 0; 
+                } else {
+                    // KẾT HỢP ĐÚNG
+                    satisfaction += sauce.bonus;
+                    bonusMessage = `(+${sauce.bonus} điểm từ Sốt ${sauce.name}! KẾT HỢP HOÀN HẢO!) 🥳`;
+                    newMood = "happy";
+                }
+
+                // Giảm số lượng nước sốt
+                state.sauceInventory[sauce.id] -= 1;
+            }
+
+            // 2. Điểm bonus từ Món tủ VÀ THƯỞNG TIỀN
+            if (selectedItemData.favoriteCharacter === selectedCharacter) {
+                satisfaction += 15; 
+                moneyGain = 200; 
+                bonusMessage += ` (MÓN TỦ: +15 điểm Bonus & +${moneyGain} Gold!) ✨`;
+                newMood = "very_happy";
+            } else {
+                moneyGain = 25; 
+                bonusMessage += ` (Ăn món lạ: +${moneyGain} Gold!)`;
+            }
+            
+            // 3. Cập nhật Tiền (Gold)
+            state.money += moneyGain;
+
+            // 4. Giảm số lượng món ăn/nước uống
+            inventory[selectedItemData.id] -= 1;
+
+            // 5. Cập nhật tổng điểm hài lòng
+            state.characterSatisfaction[selectedCharacter] += satisfaction;
+
+            // 6. Tạo Phản hồi và Cảm xúc
+            let newFeedback = "";
+            
+            if (satisfaction >= 90) {
+                newFeedback = `PERFECT! ${selectedCharacter} CỰC KỲ HÀI LÒNG! (+${satisfaction} điểm) ${bonusMessage}`;
+                if (newMood !== "very_happy") newMood = "very_happy"; 
+            } else if (satisfaction >= 70) {
+                newFeedback = `NGON! ${selectedCharacter} thích món này! (+${satisfaction} điểm) ${bonusMessage}`;
+                if (newMood === "neutral") newMood = "happy"; 
+            } else if (satisfaction >= 40) {
+                newFeedback = `ỔN! ${selectedCharacter} ăn rồi! (+${satisfaction} điểm) ${bonusMessage}`;
+                if (newMood === "sad") newMood = "neutral"; 
+                else newMood = "neutral";
+            } else {
+                 newFeedback = `KHÔNG HÀI LÒNG! Món này tệ quá! (+${satisfaction} điểm) ${bonusMessage}`;
+                 newMood = "sad";
+            }
+            
+            state.feedback = newFeedback;
+            state.mood[selectedCharacter] = newMood;
+            state.selectedSauceId = null; 
+
+            // Cập nhật DOM
+            renderAll();
+
+            // Đặt lại trạng thái cảm xúc sau 2 giây
+            setTimeout(() => {
+                state.mood[selectedCharacter] = "neutral";
+                renderContent();
+            }, 2000);
+        };
+        
+        // --- RENDER FUNCTIONS (DOM) ---
+        
+        const renderAll = () => {
+             renderHeader();
+             renderTabNav();
+             renderContent();
+        };
+
+        const renderHeader = () => {
+            const headerElement = document.getElementById('app-header');
+            const totalSatisfaction = getTotalSatisfaction();
+
+            headerElement.innerHTML = `
+                <h1 class="text-5xl sm:text-6xl font-extrabold text-pink-600 mb-4 font-['Inter'] drop-shadow-lg">
+                    🍽️ Ăn Cả Thế Giới Cùng Chiikawa
+                </h1>
+                <div class="flex flex-col md:flex-row justify-center items-center gap-4 mb-8 p-4 bg-pink-100 rounded-2xl shadow-xl">
+                    <p class="text-xl font-bold text-gray-700">
+                        Tổng Hài Lòng: <span class="font-black text-pink-700 text-2xl">${totalSatisfaction}</span>
+                    </p>
+                    <p class="text-xl font-bold text-gray-700">
+                        💰 Tiền (Gold): <span class="font-black text-yellow-600 text-2xl">${state.money} G</span>
+                    </p>
+                </div>
+                
+                <!-- Khu vực Trình Phát Nhạc & Đổi Nhạc -->
+                <div class="mt-4 p-4 bg-purple-100 border-4 border-purple-300 rounded-3xl shadow-2xl flex flex-col items-center max-w-4xl mx-auto">
+                    <p class="text-2xl font-black text-purple-700 mb-3">🎶 Nhạc Nền Chiikawa</p>
+                    <!-- Audio Element (Sử dụng state.musicUrl) -->
+                    <audio controls autoplay loop src="${state.musicUrl}" class="w-full max-w-lg mb-4 rounded-lg"></audio>
+
+                    <!-- Tính năng Thêm Nhạc (Cập nhật) -->
+                    <div class="w-full max-w-lg text-sm bg-white p-4 rounded-xl shadow-inner space-y-4 border border-purple-200">
+                        <p class="text-sm font-semibold text-purple-600 mb-2 border-b pb-1">Cập Nhật Nhạc Nền</p>
+                        
+                        <!-- 1. Đổi nhạc bằng Tên file/URL -->
+                        <div>
+                            <p class="text-sm font-semibold text-purple-600 mb-1">Tùy chọn 1: Nhập Tên File/URL</p>
+                            <div class="flex space-x-2">
+                                <input 
+                                    type="text" 
+                                    id="new-music-url" 
+                                    placeholder="Ví dụ: chiiik.WAV hoặc link trực tiếp" 
+                                    value="${state.musicUrl.startsWith('blob:') ? 'Đã tải file' : state.musicUrl}"
+                                    class="flex-grow p-2 border border-gray-300 rounded-xl text-sm disabled:bg-gray-100"
+                                    ${state.musicUrl.startsWith('blob:') ? 'disabled' : ''}
+                                >
+                                <button 
+                                    onclick="handleUpdateMusicUrl()"
+                                    class="bg-purple-500 hover:bg-purple-600 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors transform active:scale-95 disabled:bg-gray-400 shadow-md"
+                                    ${state.musicUrl.startsWith('blob:') ? 'disabled' : ''}
+                                >
+                                    Cập Nhật URL
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 2. Đổi nhạc bằng File Upload -->
+                        <div>
+                            <p class="text-sm font-semibold text-purple-600 mb-1">Tùy chọn 2: Tải lên File Nhạc (.mp3, .wav...)</p>
+                            <label for="music-upload" class="flex items-center space-x-2 p-3 border-2 border-dashed border-pink-400 rounded-xl cursor-pointer bg-pink-50 hover:bg-pink-100 transition-colors shadow-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-pink-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L6.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="text-sm font-bold text-pink-700">Chọn file nhạc từ máy tính của bạn</span>
+                                <input 
+                                    type="file" 
+                                    id="music-upload" 
+                                    accept="audio/*" 
+                                    onchange="handleMusicFileUpload(event)"
+                                    class="hidden"
+                                >
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+        
+        const renderTabNav = () => {
+            const tabNavElement = document.getElementById('tab-nav');
+            const activeClass = "bg-pink-500 text-white shadow-lg border-pink-500 font-black";
+            const inactiveClass = "text-gray-500 hover:bg-pink-50 hover:text-pink-600 font-semibold";
+
+            tabNavElement.innerHTML = `
+                <button
+                    onclick="setActiveTab('eat')"
+                    class="px-8 py-3 text-xl rounded-t-xl transition-all duration-200 border-b-4 ${
+                        state.activeTab === 'eat' ? activeClass : inactiveClass
+                    }"
+                >
+                    🍴 Bữa Tiệc (Ăn Uống)
+                </button>
+                <button
+                    onclick="setActiveTab('shop')"
+                    class="px-8 py-3 text-xl rounded-t-xl transition-all duration-200 border-b-4 ${
+                        state.activeTab === 'shop' ? activeClass : inactiveClass
+                    }"
+                >
+                    🛍️ Cửa Hàng (Menu)
+                </button>
+            `;
+        };
+
+        // SỬA LỖI: Gán setActiveTab vào window để nó có thể được gọi từ onclick inline
+        window.setActiveTab = (tab) => {
+            state.activeTab = tab;
+            renderTabNav();
+            renderContent();
+        };
+
+        const renderContent = () => {
+            const contentElement = document.getElementById('main-content');
+            if (state.activeTab === 'eat') {
+                contentElement.innerHTML = renderEating();
+            } else {
+                contentElement.innerHTML = renderShop();
+            }
+        };
+
+        const renderCharacterDisplay = (name) => {
+            const charEmoji = name === "Chiikawa" ? "🐭" : name === "Hachiware" ? "🐱" : "🐰";
+            const charMood = state.mood[name];
+            let emoji = charEmoji; 
+            let color = "bg-gray-100";
+            let moodText = "Bình thường";
+
+            if (charMood === "happy") {
+                emoji = "😊"; 
+                color = "bg-yellow-200";
+                moodText = "Vui vẻ";
+            } else if (charMood === "very_happy") {
+                emoji = "💖"; 
+                color = "bg-pink-300 animate-pulse";
+                moodText = "Rất Hài Lòng!";
+            } else if (charMood === "sad") {
+                emoji = "😢";
+                color = "bg-red-200";
+                moodText = "Buồn";
+            } else {
+                emoji = charEmoji;
+                color = "bg-blue-100";
+            }
+
+
+            return `
+                <div 
+                    onclick="handleSelectCharacter('${name}')"
+                    class="character-card p-4 rounded-3xl shadow-xl transition-all duration-300 flex flex-col items-center cursor-pointer transform hover:scale-[1.02]
+                        ${state.selectedCharacter === name ? 'selected' : 'bg-white border-2 border-gray-100'}
+                    "
+                >
+                    <div class="p-4 rounded-full ${color} w-20 h-20 flex items-center justify-center text-4xl mb-2 border-4 border-white shadow-inner">
+                        ${emoji}
+                    </div>
+                    <p class="font-extrabold text-xl text-gray-800">${name}</p>
+                    <p class="text-xs text-purple-500 font-semibold mb-2">${moodText}</p>
+                    
+                    <div class="w-full mt-2">
+                        <p class="text-xs text-pink-500 font-bold mb-1">
+                            Hài Lòng: <span class="font-extrabold">${state.characterSatisfaction[name]}</span>
+                        </p>
+                        <!-- Thanh tiến trình (Giả định max 500 điểm cho progress bar) -->
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${Math.min(100, (state.characterSatisfaction[name] / 500) * 100)}%;"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderItemCard = (item) => {
+             const isSelected = state.selectedItem.id === item.id && state.selectedItem.category === item.category;
+             const inventoryCount = getInventoryCount(item);
+             const cardTitle = item.category === 'food' ? 'Đồ Ăn' : 'Nước Uống';
+             const categoryColor = item.category === 'food' ? 'pink' : 'green';
+             
+             return `
+                <div
+                    onclick="handleSelectItem(${item.id}, '${item.category}')"
+                    class="p-4 rounded-xl shadow-lg cursor-pointer transition-transform duration-200 transform hover:scale-105 border-4 bg-white 
+                        ${isSelected ? `ring-4 ring-${categoryColor}-500 border-${categoryColor}-700 shadow-2xl` : `border-${categoryColor}-200 shadow-md`}
+                        ${getTypeColor(item.type)}"
+                >
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-4xl">${item.emoji}</span>
+                        <span class="bg-${categoryColor}-500 text-white text-sm font-bold px-3 py-1 rounded-full shadow-md">x${inventoryCount}</span>
+                    </div>
+                    
+                    <p class="font-extrabold text-gray-800 text-md truncate">${item.name}</p>
+                    <p class="text-xs text-green-700 font-bold">Tủ: ${item.favoriteCharacter}</p>
+                    <p class="text-xs text-red-600 font-bold">Tránh: ${getSauceById(item.avoidSauceId).emoji}</p>
+                </div>
+            `;
+        };
+
+        const renderEating = () => {
+            const sauce = state.selectedSauceId ? getSauceById(state.selectedSauceId) : null;
+            const selectedItemData = getItemDataFromState(state.selectedItem);
+            
+            let html = `
+                <!-- 1. Trạng thái Chiikawa, Hachiware, Usagi -->
+                <h2 class="text-3xl font-black text-pink-600 mb-6 border-b pb-3">👪 Tình Trạng Hài Lòng của Nhóm</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                    ${renderCharacterDisplay("Chiikawa")}
+                    ${renderCharacterDisplay("Hachiware")}
+                    ${renderCharacterDisplay("Usagi")}
+                </div>
+                
+                <!-- 2. Khu vực Phản hồi và Hành động -->
+                <div class="mb-10 p-5 bg-purple-200 border-4 border-purple-500 rounded-3xl text-center shadow-2xl">
+                    <p class="font-extrabold text-purple-900 transition-opacity duration-500 ${state.feedback.includes('PERFECT') ? 'text-2xl animate-bounce' : 'text-xl'}">
+                        ${state.feedback}
+                    </p>
+                </div>
+
+                <!-- 3. Khu vực Ăn Chính -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Cột 1: Vật Phẩm Chính Đang Chọn -->
+                    <div class="lg:col-span-1 p-6 bg-yellow-50 chiikawa-card border-4 border-yellow-300">
+                        <h3 class="text-2xl font-black text-yellow-700 mb-4 border-b pb-2">Vật Phẩm Đang Chọn</h3>
+                        <div class="text-center p-4 rounded-2xl bg-white shadow-inner">
+                            <div class="text-6xl mb-3">${selectedItemData.emoji}</div>
+                            <p class="font-black text-gray-800 text-xl mb-3">
+                                ${selectedItemData.name}
+                                <span class="bg-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full ml-2">x${getInventoryCount(selectedItemData)}</span>
+                            </p>
+                            <p class="text-sm font-semibold text-gray-500 mb-3">Loại: ${selectedItemData.category === 'food' ? 'Đồ Ăn' : 'Nước Giải Khát'}</p>
+                            
+                            <!-- Sở thích chi tiết -->
+                            <div class="mt-4 p-3 rounded-xl bg-green-100 border border-green-300">
+                                <p class="text-sm text-gray-700 font-bold">🎯 MÓN TỦ CỦA: <span class="text-green-700 font-extrabold">${selectedItemData.favoriteCharacter}</span></p>
+                            </div>
+                            
+                            <div class="mt-2 p-3 rounded-xl bg-red-100 border border-red-300">
+                                <p class="text-sm text-gray-700 font-bold">🚫 GHÉT KẾT HỢP VỚI: <span class="text-red-700 font-extrabold">${getAvoidSauceName(selectedItemData)}</span></p>
+                                <p class="text-xs text-red-500 italic">Thất vọng nặng: ${selectedItemData.criticalFailCharacter}</p>
+                            </div>
+                        </div>
+
+                        <!-- Nút Ăn -->
+                        <div class="mt-6 flex justify-center">
+                            <button
+                                onclick="handleEatFood()"
+                                class="w-full px-8 py-4 bg-pink-500 hover:bg-pink-600 text-white font-black rounded-full shadow-lg transform active:scale-95 transition-all duration-150 disabled:bg-gray-400 text-xl"
+                                ${getInventoryCount(selectedItemData) <= 0 ? 'disabled' : ''}
+                            >
+                                🍽️ Cho ${state.selectedCharacter} Ăn!
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Cột 2: Kho Nước Sốt -->
+                    <div class="lg:col-span-2 p-6 bg-blue-50 chiikawa-card border-4 border-blue-300">
+                        <h3 class="text-2xl font-black text-blue-700 mb-4 border-b pb-2">🧪 Kho Nước Sốt (Nhấp để chọn)</h3>
+                        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 gap-4">
+                            ${SAUCES.map(s => `
+                                <button
+                                    onclick="handleSelectSauce('${s.id}')"
+                                    class="p-3 rounded-xl shadow-md transition-all duration-200 transform hover:scale-105 
+                                        ${(state.sauceInventory[s.id] || 0) > 0 ? 'bg-white hover:bg-blue-100 cursor-pointer' : 'bg-gray-200 cursor-not-allowed'}
+                                        ${state.selectedSauceId === s.id ? 'ring-4 ring-purple-500 border-4 border-white shadow-xl' : 'border-2 border-gray-100'}
+                                        "
+                                    ${(state.sauceInventory[s.id] || 0) <= 0 ? 'disabled' : ''}
+                                >
+                                    <div class="text-4xl">${s.emoji}</div>
+                                    <p class="font-bold text-gray-800 text-sm truncate">${s.name}</p>
+                                    <p class="text-xs text-blue-600 font-extrabold">x${state.sauceInventory[s.id] || 0}</p>
+                                    ${state.selectedSauceId === s.id ? '<p class="text-xs text-purple-700 mt-1 font-black">CHỌN</p>' : ''}
+                                </button>
+                            `).join('')}
+                        </div>
+                        <p class="text-right text-xs text-gray-500 italic mt-4">
+                            *Sốt đã chọn: ${sauce ? sauce.emoji + " " + sauce.name : "Không"}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 4. Kho Đồ Ăn -->
+                <h2 class="text-3xl font-black text-pink-600 mt-10 mb-4 border-b pb-3">📦 Kho Đồ Ăn (120 Món - Nhấp để chọn)</h2>
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                    ${FOOD_MENU.filter(food => getInventoryCount(food) > 0).map((food) => renderItemCard(food)).join('')}
+                </div>
+                ${FOOD_MENU.filter(food => getInventoryCount(food) > 0).length === 0 ? 
+                    '<p class="text-center text-gray-500 mt-6 text-lg font-semibold">Kho đồ ăn đang trống. Hãy vào Cửa Hàng để mua đồ ăn!</p>' : ''
+                }
+                
+                <!-- 5. Kho Nước Giải Khát -->
+                <h2 class="text-3xl font-black text-green-600 mt-10 mb-4 border-b pb-3">🥤 Kho Nước Giải Khát (35 Món - Nhấp để chọn)</h2>
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                    ${BEVERAGES.filter(beverage => getInventoryCount(beverage) > 0).map((beverage) => renderItemCard(beverage)).join('')}
+                </div>
+                ${BEVERAGES.filter(beverage => getInventoryCount(beverage) > 0).length === 0 ? 
+                    '<p class="text-center text-gray-500 mt-6 text-lg font-semibold">Kho nước giải khát đang trống. Hãy vào Cửa Hàng để mua nước uống!</p>' : ''
+                }
+            `;
+            return html;
+        };
+
+        const renderShop = () => {
+            let html = `
+                <h2 class="text-3xl font-black text-pink-600 mb-4">🛍️ Cửa Hàng Menu Đặc Biệt</h2>
+                <p class="text-gray-600 mb-8 text-lg">Dùng Gold (G) để mua đồ ăn, nước sốt và nước giải khát. Tổng tiền của bạn: <span class="font-extrabold text-yellow-600">${state.money} G</span></p>
+                
+                <!-- Nước Sốt -->
+                <h3 class="text-2xl font-black text-blue-700 mb-4 border-b-2 border-blue-300 pb-2">🧪 Nước Sốt Đặc Biệt (15 Loại)</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 mb-10">
+                    ${SAUCES.map((sauce) => `
+                        <div class="p-4 rounded-3xl shadow-xl border-4 border-blue-200 transition-transform duration-200 bg-white hover:scale-105 flex flex-col items-center">
+                            <div class="text-4xl mb-2">${sauce.emoji}</div>
+                            <p class="font-extrabold text-gray-800 text-md text-center truncate mb-1">${sauce.name}</p>
+                            <p class="text-xs text-gray-600 text-center">Bonus: +${sauce.bonus} điểm</p>
+                            
+                            <div class="mt-3 flex items-center justify-between w-full px-1">
+                                <span class="font-black text-blue-700 text-xl">${sauce.price} G</span>
+                                <button
+                                    onclick="handleBuyItem({ id: '${sauce.id}', name: '${sauce.name}', price: ${sauce.price}, category: 'sauce' })"
+                                    class="bg-blue-500 hover:bg-blue-600 text-white text-sm px-3 py-1 rounded-full font-bold transform active:scale-95 shadow-md"
+                                >
+                                    Mua (1)
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <!-- Nước Giải Khát -->
+                <h3 class="text-2xl font-black text-green-700 mb-4 border-b-2 border-green-300 pb-2">🥤 Nước Giải Khát (35 Loại)</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mb-10">
+                    ${BEVERAGES.map((beverage) => `
+                        <div class="p-4 rounded-3xl shadow-xl border-4 border-green-200 transition-transform duration-200 bg-white hover:scale-105 flex flex-col items-center">
+                            <div class="text-4xl mb-2">${beverage.emoji}</div>
+                            <p class="font-extrabold text-gray-800 text-md text-center truncate mb-1">${beverage.name}</p>
+                            <p class="text-xs text-pink-700 font-bold">Món tủ: ${beverage.favoriteCharacter}</p>
+                            
+                            <div class="mt-3 flex items-center justify-between w-full px-1">
+                                <span class="font-black text-green-700 text-xl">${beverage.price} G</span>
+                                <button
+                                    onclick="handleBuyItem({ id: ${beverage.id}, name: '${beverage.name}', price: ${beverage.price}, category: 'beverage' })"
+                                    class="bg-green-500 hover:bg-green-600 text-white text-sm px-3 py-1 rounded-full font-bold transform active:scale-95 shadow-md"
+                                >
+                                    Mua (1)
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <!-- Đồ Ăn -->
+                <h3 class="text-2xl font-black text-pink-700 mb-4 border-b-2 border-pink-300 pb-2">🍰 Đồ Ăn (120 Món)</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                    ${FOOD_MENU.map((food) => `
+                        <div class="p-4 rounded-3xl shadow-xl border-4 border-pink-200 transition-transform duration-200 transform hover:scale-105 bg-white flex flex-col items-center">
+                            <div class="text-4xl mb-2">${food.emoji}</div>
+                            <p class="font-extrabold text-gray-800 text-md text-center truncate mb-1">${food.name}</p>
+                            <p class="text-xs text-green-700 font-bold">Món tủ: ${food.favoriteCharacter}</p>
+                            
+                            <div class="mt-3 flex items-center justify-between w-full px-1">
+                                <span class="font-black text-pink-700 text-xl">${food.price} G</span>
+                                <button
+                                    onclick="handleBuyItem({ id: ${food.id}, name: '${food.name}', price: ${food.price}, category: 'food' })"
+                                    class="bg-pink-500 hover:bg-pink-600 text-white text-sm px-3 py-1 rounded-full font-bold transform active:scale-95 shadow-md"
+                                >
+                                    Mua (1)
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            return html;
+        };
+
+        const initializeApp = async () => {
+            // Khởi tạo trạng thái mặc định ngay lập tức
+            state = getDefaultState();
+            
+            // Render giao diện
+            renderAll();
+            
+            // Xử lý nhạc nền ban đầu
+            const audio = document.querySelector('audio');
+            if (audio) {
+                audio.volume = 0.3; // Giảm âm lượng mặc định
+            }
+        };
+        
+        // Khởi chạy ứng dụng khi DOM đã sẵn sàng
+        window.onload = initializeApp;
+    </script>
+</body>
+</html>
